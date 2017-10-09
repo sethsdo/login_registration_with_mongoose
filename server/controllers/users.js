@@ -12,9 +12,20 @@ module.exports = {
     login_and_registration: function (req, res) {
         if(!req.session.user) {
             req.session.user = ''
-            console.log(req.session.user)
         }
-        return res.render("index")
+        if (!req.session.errors) {
+            req.session.errors = []
+        }
+        if (!req.session.login) {
+            req.session.login = []
+        }
+        const context = {
+            "errors": req.session.errors,
+            "lg_err": req.session.login
+        }
+        res.render("index", context)
+        req.session.destroy()
+        
     },
     registration: function (req, res) {
         const newUser = new User({ email: req.body.email, first_name: req.body.first_name, last_name: req.body.last_name, pwd: req.body.pwd, bday: req.body.bday })
@@ -26,8 +37,8 @@ module.exports = {
                     if (req.body.pwd != req.body.confirm_pwd) {
                         console.log("passwords don't match")
                     }
-                    console.log(newUser.errors)
-                    return res.render('index', { errors: newUser.errors })
+                    req.session.errors = newUser.errors
+                    return res.redirect('/')
                 }
                 console.log(newUser)
                 req.session.user = req.body.email;
@@ -36,20 +47,32 @@ module.exports = {
         }
     },
     login: function (req, res) {
-        req.checkBody(req.params.email, 'Input must be full').notEmpty();
-        req.checkBody(req.params.pwd, 'Password input must be full').notEmpty();
-        
-        const user = User.findOne({ email: req.body.email }, function(err, current_user) {
-            if (err) { res.render('index', { errors: "Invalid email!" }) }
-            current_user.comparePassword(req.body.pwd, function(err, isMatch) {
-                if (err) {
-                    console.log("hello")
-                    res.render('index', {errors: "password does not match!"})
+        const email = req.checkBody('email', 'Email input must be entered').notEmpty()
+        const pwd = req.checkBody('pwd', 'Password input must be full').notEmpty()
+        var errors = req.validationErrors();
+        if (errors) {
+            req.session.login = errors
+            for (let dd in req.session.login){
+                console.log(req.session.login[dd].msg)
+            }
+            return res.redirect('/')
+        }
+        else{
+            const user = User.findOne({ email: req.body.email }, function(err, current_user) {
+                if (err) { 
+                    return res.redirect('/')
                 }
-                req.session.user = req.body.email
-                res.redirect("/dashboard")
+                current_user.comparePassword(req.body.pwd, function(err, isMatch) {
+                    if (err) {
+                        console.log("hello")
+                        req.session.errors = "password does not match!"
+                        return res.redirect('/')
+                    }
+                    req.session.user = req.body.email
+                    res.redirect("/dashboard")
+                })
             })
-        })
+        }
     },
     dashboard: function (req, res) {
         console.log(req.session.user)
